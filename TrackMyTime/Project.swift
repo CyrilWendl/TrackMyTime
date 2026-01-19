@@ -10,9 +10,11 @@ import SwiftData
 final class Project {
     var id: UUID
     var name: String
+    var details: String?
 
-    init(id: UUID = UUID(), name: String) {
+    init(id: UUID = UUID(), name: String, details: String? = nil) {
         self.id = id
         self.name = name
+        self.details = details
     }
 }

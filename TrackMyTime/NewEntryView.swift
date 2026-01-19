@@ -83,12 +83,24 @@ struct NewEntryView: View {
             .alert(isPresented: $showAlert) {
                 Alert(title: Text("Validation"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
             }
+            .onAppear {
+                // Pre-select the first project if available
+                if selectedProjectID == nil {
+                    selectedProjectID = projects.first?.id
+                }
+            }
+            .onChange(of: projects) { newProjects in
+                if selectedProjectID == nil {
+                    selectedProjectID = newProjects.first?.id
+                }
+            }
         }
     }
 
     private func save() {
-        // Validation
-        guard let projectID = selectedProjectID, let project = projects.first(where: { $0.id == projectID }) else {
+        // Validation: accept selectedProjectID or fallback to first project
+        let projectID = selectedProjectID ?? projects.first?.id
+        guard let projectIDUnwrapped = projectID, let project = projects.first(where: { $0.id == projectIDUnwrapped }) else {
             alertMessage = "Please select a project."
             showAlert = true
             return

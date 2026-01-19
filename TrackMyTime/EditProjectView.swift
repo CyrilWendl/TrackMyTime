@@ -1,5 +1,5 @@
 //
-//  AddProjectView.swift
+//  EditProjectView.swift
 //  TrackMyTime
 //
 //  Created by GitHub Copilot on 19.01.2026.
@@ -8,13 +8,14 @@
 import SwiftUI
 import SwiftData
 
-struct AddProjectView: View {
+struct EditProjectView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
+    let project: Project
+
     @State private var name: String = ""
     @State private var details: String = ""
-    @State private var showAlert: Bool = false
 
     var body: some View {
         NavigationView {
@@ -27,7 +28,7 @@ struct AddProjectView: View {
                         .frame(minHeight: 80)
                 }
             }
-            .navigationTitle("New Project")
+            .navigationTitle("Edit Project")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -37,28 +38,24 @@ struct AddProjectView: View {
                         .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .alert("Name required", isPresented: $showAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Please provide a project name.")
+            .onAppear {
+                name = project.name
+                details = project.details ?? ""
             }
         }
     }
 
     private func save() {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            showAlert = true
-            return
+        withAnimation {
+            project.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+            project.details = trimmedDetails.isEmpty ? nil : trimmedDetails
         }
-
-        let project = Project(name: trimmed, details: details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : details)
-        modelContext.insert(project)
         dismiss()
     }
 }
 
 #Preview {
-    AddProjectView()
+    EditProjectView(project: Project(name: "Preview"))
         .modelContainer(for: [Project.self], inMemory: true)
 }
