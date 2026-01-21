@@ -54,19 +54,30 @@ struct ProjectDetailView: View {
                 }
             }
         }
-        .actionSheet(isPresented: $showingDeleteOptions) {
-            ActionSheet(title: Text("Delete project?"), message: Text("What should we do with entries that belong to this project?"), buttons: [
-                .destructive(Text("Delete entries and project")) {
-                    deleteProjectAndEntries()
-                },
-                .default(Text("Reassign entries to another project")) {
-                    showingReassign = true
-                },
-                .cancel()
-            ])
+        // Use confirmationDialog which displays title and message reliably across platforms
+        .confirmationDialog("Delete project?", isPresented: $showingDeleteOptions, titleVisibility: .visible) {
+            Button(role: .destructive) {
+                deleteProjectAndEntries()
+            } label: {
+                Text("Delete entries and project")
+            }
+
+            Button {
+                showingReassign = true
+            } label: {
+                Text("Reassign entries to another project")
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("What should we do with entries that belong to this project?")
         }
         .sheet(isPresented: $showingReassign) {
             ReassignEntriesView(sourceProject: project)
+        }
+        .sheet(isPresented: $showingEdit) {
+            // Present the edit view for the selected project
+            EditProjectView(project: project)
         }
     }
 
@@ -94,6 +105,7 @@ struct ProjectDetailView: View {
 }
 
 #Preview {
-    ProjectDetailView(project: Project(name: "Preview Project"))
-        .modelContainer(for: [Project.self, Entry.self], inMemory: true)
+    let (container, previewProject) = PreviewData.containerAndFirstProject()
+    ProjectDetailView(project: previewProject)
+        .modelContainer(container)
 }

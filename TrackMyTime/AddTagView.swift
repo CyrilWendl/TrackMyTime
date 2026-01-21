@@ -14,12 +14,15 @@ struct AddTagView: View {
 
     @State private var name: String = ""
     @State private var showAlert: Bool = false
+    // allow selecting a color for the tag
+    @State private var color: Color = .accentColor
 
     var body: some View {
         NavigationView {
             Form {
                 Section("Tag") {
                     TextField("Name", text: $name)
+                    ColorPicker("Color", selection: $color)
                 }
             }
             .navigationTitle("New Tag")
@@ -47,7 +50,9 @@ struct AddTagView: View {
             return
         }
 
-        let tag = Tag(name: trimmed)
+        // convert selected Color to a hex string (fallback to accent color hex)
+        let hex = color.toHexString() ?? "#007AFF"
+        let tag = Tag(name: trimmed, colorHex: hex)
         modelContext.insert(tag)
         dismiss()
     }

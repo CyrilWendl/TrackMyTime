@@ -31,7 +31,7 @@ final class Entry {
         return end.timeIntervalSince(startDate)
     }
 
-    // Indicates the entry is currently running (no end date)
+    // Computed property to indicate whether this entry is currently running
     var isRunning: Bool {
         return endDate == nil
     }

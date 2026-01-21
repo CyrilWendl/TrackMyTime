@@ -14,11 +14,13 @@ struct ContentView: View {
     @Query private var projects: [Project]
     @Query private var tags: [Tag]
 
-    @State private var selection: SidebarItem? = .entries
+    @State private var selection: SidebarItem? = nil
     @State private var showingNewEntry = false
     @State private var showingAddProject = false
     @State private var showingAddTag = false
     @State private var noProjectAlert = false
+    @State private var showExportSheet = false
+    @State private var exportURL: URL? = nil
 
     enum SidebarItem: Hashable {
         case entries
@@ -38,6 +40,9 @@ struct ContentView: View {
                     }
                     Button(action: { showingAddTag = true }) {
                         Label("New Tag", systemImage: "tag")
+                    }
+                    Button(action: { exportAllEntriesAsCSV() }) {
+                        Label("Export as CSV", systemImage: "square.and.arrow.up")
                     }
                 }
 
@@ -100,11 +105,42 @@ struct ContentView: View {
         .sheet(isPresented: $showingAddTag) {
             AddTagView()
         }
+        .sheet(isPresented: $showExportSheet, onDismiss: { exportURL = nil }) {
+            if let url = exportURL {
+                ShareLink(item: url) { Text("Share CSV") }
+            } else {
+                Text("Preparing…")
+            }
+        }
         .alert("No projects", isPresented: $noProjectAlert) {
             Button("Create Project") { showingAddProject = true }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You need to create a project before adding entries.")
+        }
+        .onOpenURL { url in
+            // Handle deep link from Dynamic Island / Live Activity
+            if url.scheme == "trackmytime", url.host == "running" {
+                selection = .entries
+            }
+        }
+        .onChange(of: entries) { newEntries in
+            // Start/stop Live Activities for running entries
+            for entry in newEntries {
+                if entry.isRunning {
+#if canImport(ActivityKit)
+                    if #available(iOS 16.1, *) {
+                        ActivityManager.shared.startActivity(for: entry)
+                    }
+#endif
+                } else {
+#if canImport(ActivityKit)
+                    if #available(iOS 16.1, *) {
+                        ActivityManager.shared.endActivity(for: entry)
+                    }
+#endif
+                }
+            }
         }
     }
 
@@ -113,6 +149,35 @@ struct ContentView: View {
             noProjectAlert = true
         } else {
             showingNewEntry = true
+        }
+    }
+
+    private func exportAllEntriesAsCSV() {
+        let csvHeader = "id,project,tags,notes,startDate,endDate,durationSeconds\n"
+        var csv = csvHeader
+
+        let iso8601 = ISO8601DateFormatter()
+        for entry in entries {
+            let id = entry.id.uuidString
+            let projectName = entry.project?.name.replacingOccurrences(of: ",", with: " ") ?? ""
+            let tagNames = entry.tags.map { $0.name.replacingOccurrences(of: ",", with: " ") }.joined(separator: ";")
+            let notes = entry.notes.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: ",", with: " ")
+            let start = iso8601.string(from: entry.startDate)
+            let end = entry.endDate.map { iso8601.string(from: $0) } ?? ""
+            let duration = entry.duration.map { String(Int($0)) } ?? ""
+            let line = "\(id),\(projectName),\(tagNames),\(notes),\(start),\(end),\(duration)\n"
+            csv += line
+        }
+
+        // write to temp file and present share sheet
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileURL = tempDir.appendingPathComponent("trackmytime_entries_\(Int(Date().timeIntervalSince1970)).csv")
+        do {
+            try csv.write(to: fileURL, atomically: true, encoding: .utf8)
+            exportURL = fileURL
+            showExportSheet = true
+        } catch {
+            print("Failed to write CSV: \(error)")
         }
     }
 }
@@ -124,8 +189,6 @@ private struct ProjectsListView: View {
     @Query private var projects: [Project]
 
     @State private var showingAddProject = false
-    @State private var editingProject: Project? = nil
-    @State private var showingEdit = false
 
     var body: some View {
         NavigationStack {
@@ -135,13 +198,6 @@ private struct ProjectsListView: View {
                         ProjectDetailView(project: project)
                     } label: {
                         Text(project.name)
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button("Edit") {
-                            editingProject = project
-                            showingEdit = true
-                        }
-                        .tint(.blue)
                     }
                 }
                 .onDelete(perform: deleteProjects)
@@ -156,11 +212,6 @@ private struct ProjectsListView: View {
             }
             .sheet(isPresented: $showingAddProject) {
                 AddProjectView()
-            }
-            .sheet(isPresented: $showingEdit) {
-                if let editingProject = editingProject {
-                    EditProjectView(project: editingProject)
-                }
             }
         }
     }
@@ -218,11 +269,6 @@ private struct TagsListView: View {
 private struct EntriesListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var entries: [Entry]
-    @Query private var projects: [Project]
-
-    @State private var showingNewEntry = false
-    @State private var showingAddProject = false
-    @State private var showNoProjectAlert = false
 
     var body: some View {
         NavigationStack {
@@ -274,32 +320,6 @@ private struct EntriesListView: View {
                 .onDelete(perform: deleteEntries)
             }
             .navigationTitle("Entries")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        if projects.isEmpty {
-                            // Show explanation alert and offer to create a project
-                            showNoProjectAlert = true
-                        } else {
-                            showingNewEntry = true
-                        }
-                    }) {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingNewEntry) {
-                NewEntryView()
-            }
-            .sheet(isPresented: $showingAddProject) {
-                AddProjectView()
-            }
-            .alert("No projects", isPresented: $showNoProjectAlert) {
-                Button("Create Project") { showingAddProject = true }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("You don't have any projects yet. Please create a project first before adding entries.")
-            }
         }
     }
 
@@ -320,5 +340,46 @@ private struct EntriesListView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Item.self, Entry.self, Project.self, Tag.self], inMemory: true)
+        .modelContainer(previewModelContainer())
+}
+
+// Helper for previews: create an in-memory ModelContainer seeded with sample projects
+private func previewModelContainer() -> ModelContainer {
+    let schema = Schema([Item.self, Entry.self, Project.self, Tag.self])
+    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+    let container: ModelContainer
+    do {
+        container = try ModelContainer(for: schema, configurations: [config])
+    } catch {
+        fatalError("Failed to create preview ModelContainer: \(error)")
+    }
+
+    let context = container.mainContext
+
+    // Insert a few example projects for the canvas
+    let p1 = Project(name: "Personal", details: "Home tasks and hobbies")
+    let p2 = Project(name: "Work", details: "Client projects and meetings")
+    let p3 = Project(name: "Open Source", details: "Library maintenance")
+
+    context.insert(p1)
+    context.insert(p2)
+    context.insert(p3)
+
+    // Insert some example tags
+    let t1 = Tag(name: "Research", colorHex: "#FF9500")
+    let t2 = Tag(name: "Meeting", colorHex: "#007AFF")
+    context.insert(t1)
+    context.insert(t2)
+
+    // Insert example entries: one finished and one currently running
+    let finishedEntry = Entry(project: p2, tags: [t2], notes: "Client sync and planning", startDate: Date().addingTimeInterval(-3600 * 3), endDate: Date().addingTimeInterval(-3600 * 2))
+    let runningEntry = Entry(project: p1, tags: [t1], notes: "Sketching ideas", startDate: Date().addingTimeInterval(-300), endDate: nil)
+
+    context.insert(finishedEntry)
+    context.insert(runningEntry)
+
+    // Save context (ignore errors in preview)
+    try? context.save()
+
+    return container
 }
