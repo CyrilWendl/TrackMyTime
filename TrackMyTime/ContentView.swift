@@ -26,6 +26,7 @@ struct ContentView: View {
         case entries
         case projects
         case tags
+        case about
     }
 
     var body: some View {
@@ -56,6 +57,9 @@ struct ContentView: View {
                     NavigationLink(value: SidebarItem.tags) {
                         Label("Tags", systemImage: "tag")
                     }
+                    NavigationLink(value: SidebarItem.about) {
+                        Label("About", systemImage: "info.circle")
+                    }
                 }
 
                 Section("Running") {
@@ -78,11 +82,6 @@ struct ContentView: View {
             }
             .listStyle(SidebarListStyle())
             .navigationTitle("TrackMyTime")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-            }
         } detail: {
             // Detail area shows the selected management view
             Group {
@@ -91,6 +90,8 @@ struct ContentView: View {
                     ProjectsListView()
                 case .tags:
                     TagsListView()
+                case .about:
+                    AboutView()
                 default:
                     EntriesListView()
                 }
@@ -124,7 +125,7 @@ struct ContentView: View {
                 selection = .entries
             }
         }
-        .onChange(of: entries) { newEntries in
+        .onChange(of: entries) { _, newEntries in
             // Start/stop Live Activities for running entries
             for entry in newEntries {
                 if entry.isRunning {
@@ -289,7 +290,7 @@ private struct EntriesListView: View {
                             Text(entry.notes)
                                 .font(.subheadline)
                             if let _ = entry.endDate {
-                                Text("Duration: \(Int(entry.duration ?? 0)) seconds")
+                                Text("Duration: \(formattedDuration(entry.duration))")
                                     .font(.caption)
                             } else {
                                 Text("Running")
@@ -306,7 +307,7 @@ private struct EntriesListView: View {
                             }
                             Spacer()
                             if let _ = entry.endDate {
-                                Text((entry.duration ?? 0).formatted(.number.precision(.fractionLength(0))))
+                                Text(formattedDuration(entry.duration))
                                     .font(.caption)
                             } else {
                                 Button(action: { stopEntry(entry) }) {
@@ -335,6 +336,48 @@ private struct EntriesListView: View {
                 modelContext.delete(entries[index])
             }
         }
+    }
+}
+
+// MARK: - About View
+
+private struct AboutView: View {
+    private var currentYear: String {
+        String(Calendar.current.component(.year, from: Date()))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Developer")
+                .font(.title2)
+                .bold()
+
+            Text("Cyril Wendl ©\(currentYear)")
+
+            HStack {
+                Text("Contact:")
+                    .bold()
+                if let mailURL = URL(string: "mailto:tmt@wendl.ch") {
+                    Link("tmt@wendl.ch", destination: mailURL)
+                } else {
+                    Text("tmt@wendl.ch")
+                }
+            }
+
+            HStack {
+                Text("Website:")
+                    .bold()
+                if let url = URL(string: "https://wendl.ch") {
+                    Link("wendl.ch", destination: url)
+                } else {
+                    Text("wendl.ch")
+                }
+            }
+
+            Spacer()
+        }
+        .padding()
+        .navigationTitle("About")
     }
 }
 
@@ -382,4 +425,15 @@ private func previewModelContainer() -> ModelContainer {
     try? context.save()
 
     return container
+}
+
+// New helper to format a duration (in seconds) into a human-friendly string like "1h 05m 03s" always showing hours, minutes and seconds
+private func formattedDuration(_ seconds: TimeInterval?) -> String {
+    let total = Int(seconds ?? 0)
+    let hours = total / 3600
+    let minutes = (total % 3600) / 60
+    let secs = total % 60
+
+    // Always show hours, minutes and seconds. Pad minutes and seconds to two digits for consistent width.
+    return "\(hours)h \(String(format: "%02d", minutes))m \(String(format: "%02d", secs))s"
 }
