@@ -132,8 +132,32 @@ struct EditEntryView: View {
     }
 }
 
+// Helper to create a preview View with an in-memory ModelContainer and a sample entry
+private func previewEditEntryView() -> some View {
+    let schema = Schema([Item.self, Entry.self, Project.self, Tag.self])
+    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+    let container: ModelContainer
+    do {
+        container = try ModelContainer(for: schema, configurations: [config])
+    } catch {
+        fatalError("Failed to create preview ModelContainer: \(error)")
+    }
+
+    let context = container.mainContext
+
+    let sampleProject = Project(name: "Preview Project", details: "Preview details")
+    let sampleTag = Tag(name: "Preview Tag", colorHex: "#FF9500")
+    context.insert(sampleProject)
+    context.insert(sampleTag)
+
+    let sampleEntry = Entry(project: sampleProject, tags: [sampleTag], notes: "Sample notes for preview", startDate: Date().addingTimeInterval(-3600), endDate: Date())
+    context.insert(sampleEntry)
+    try? context.save()
+
+    return EditEntryView(entry: sampleEntry)
+        .modelContainer(container)
+}
+
 #Preview {
-    // Create an in-memory container and sample data for preview
-    ContentView()
-        .modelContainer(for: [Item.self, Entry.self, Project.self, Tag.self], inMemory: true)
+    previewEditEntryView()
 }

@@ -270,38 +270,72 @@ private struct TagsListView: View {
 private struct EntriesListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var entries: [Entry]
+    @Query private var projects: [Project]
+    @Query private var tags: [Tag]
+
+    @State private var selectedProjectID: UUID? = nil // nil = All
+    @State private var selectedTagID: UUID? = nil // nil = All
+    @State private var sortNewestFirst: Bool = true
+
+    // Compute filtered and sorted entries
+    private var filteredSortedEntries: [Entry] {
+        var result = entries
+        if let pid = selectedProjectID {
+            result = result.filter { $0.project?.id == pid }
+        }
+        if let tid = selectedTagID {
+            result = result.filter { $0.tags.contains(where: { $0.id == tid }) }
+        }
+        result.sort { a, b in
+            if sortNewestFirst {
+                return a.startDate > b.startDate
+            } else {
+                return a.startDate < b.startDate
+            }
+        }
+        return result
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(entries) { entry in
-                    NavigationLink {
-                        VStack(alignment: .leading) {
-                            HStack {
-                                Image(systemName: "camera.fill")
-                                    .foregroundColor(.secondary)
-                                if entry.isRunning {
-                                    Image(systemName: "smallcircle.fill.circle")
-                                        .foregroundColor(.red)
-                                }
-                                Text(entry.project?.name ?? "No Project")
-                                    .font(.headline)
-                            }
-                            Text(entry.notes)
-                                .font(.subheadline)
-                            if let _ = entry.endDate {
-                                Text("Duration: \(formattedDuration(entry.duration))")
-                                    .font(.caption)
-                            } else {
-                                Text("Running")
-                                    .font(.caption)
+                // Filters section
+                Section(header: Text("Filters")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Project", selection: Binding(get: { selectedProjectID }, set: { selectedProjectID = $0 })) {
+                            Text("All").tag(nil as UUID?)
+                            ForEach(projects) { project in
+                                Text(project.name).tag(project.id as UUID?)
                             }
                         }
-                        .padding()
+
+                        Picker("Tag", selection: Binding(get: { selectedTagID }, set: { selectedTagID = $0 })) {
+                            Text("All").tag(nil as UUID?)
+                            ForEach(tags) { tag in
+                                Text(tag.name).tag(tag.id as UUID?)
+                            }
+                        }
+
+                        Picker("Sort", selection: $sortNewestFirst) {
+                            Text("Newest").tag(true)
+                            Text("Oldest").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                }
+
+                // Entries
+                ForEach(filteredSortedEntries) { entry in
+                    NavigationLink {
+                        EditEntryView(entry: entry)
                     } label: {
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(entry.project?.name ?? "No Project")
+                                    .font(.headline)
+                                Text(entry.notes)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
                                 Text(entry.startDate, format: .dateTime)
                                     .font(.caption)
                             }
@@ -316,11 +350,21 @@ private struct EntriesListView: View {
                                 .buttonStyle(.borderedProminent)
                             }
                         }
+                        .padding(.vertical, 6)
                     }
                 }
                 .onDelete(perform: deleteEntries)
             }
             .navigationTitle("Entries")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Clear") {
+                        selectedProjectID = nil
+                        selectedTagID = nil
+                        sortNewestFirst = true
+                    }
+                }
+            }
         }
     }
 
@@ -333,7 +377,7 @@ private struct EntriesListView: View {
     private func deleteEntries(offsets: IndexSet) {
         withAnimation {
             for index in offsets {
-                modelContext.delete(entries[index])
+                modelContext.delete(filteredSortedEntries[index])
             }
         }
     }

@@ -86,11 +86,27 @@ struct ProjectDetailView: View {
             // Entries section (kept as before)
             Section(header: Text("Entries for project")) {
                 ForEach(filteredEntries()) { entry in
-                    VStack(alignment: .leading) {
-                        Text(entry.notes)
-                            .font(.body)
-                        Text(entry.startDate, format: Date.FormatStyle(date: .numeric, time: .shortened))
-                            .font(.caption)
+                    NavigationLink {
+                        EditEntryView(entry: entry)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(entry.notes)
+                                    .font(.body)
+                                Text(entry.startDate, format: Date.FormatStyle(date: .numeric, time: .shortened))
+                                    .font(.caption)
+                            }
+                            Spacer()
+                            if let _ = entry.endDate {
+                                Text(formatDuration(entry.duration ?? 0))
+                                    .font(.caption)
+                            } else {
+                                Button(action: { stopEntry(entry) }) {
+                                    Label("Stop", systemImage: "stop.circle")
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
                     }
                 }
                 .onDelete(perform: deleteRelatedEntries)
@@ -234,6 +250,12 @@ struct ProjectDetailView: View {
             // delete the project
             modelContext.delete(project)
             dismiss()
+        }
+    }
+
+    private func stopEntry(_ entry: Entry) {
+        withAnimation {
+            entry.endDate = Date()
         }
     }
 }
