@@ -123,16 +123,16 @@ struct ProjectDetailView: View {
                 }
             }
         }
-        .actionSheet(isPresented: $showingDeleteOptions) {
-            ActionSheet(title: Text("Delete project?"), message: Text("What should we do with entries that belong to this project?"), buttons: [
-                .destructive(Text("Delete entries and project")) {
-                    deleteProjectAndEntries()
-                },
-                .default(Text("Reassign entries to another project")) {
-                    showingReassign = true
-                },
-                .cancel()
-            ])
+        .confirmationDialog("Delete project?", isPresented: $showingDeleteOptions, titleVisibility: .visible) {
+            Button("Delete entries and project", role: .destructive) {
+                deleteProjectAndEntries()
+            }
+            Button("Reassign entries to another project") {
+                showingReassign = true
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("What should we do with entries that belong to this project?")
         }
         .sheet(isPresented: $showingReassign) {
             ReassignEntriesView(sourceProject: project)
